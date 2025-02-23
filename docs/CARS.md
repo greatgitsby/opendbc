@@ -252,8 +252,8 @@
 |Škoda|Octavia Scout 2017-19|Adaptive Cruise Control (ACC) & Lane Assist|[Upstream](#upstream)|
 |Škoda|Scala 2020-23|Adaptive Cruise Control (ACC) & Lane Assist|[Upstream](#upstream)|
 |Škoda|Superb 2015-22|Adaptive Cruise Control (ACC) & Lane Assist|[Upstream](#upstream)|
-|Tesla|Model 3 2019-24|Traffic Aware Cruise Control|[Dashcam mode](#dashcam)|
-|Tesla|Model Y 2020-24|Traffic Aware Cruise Control|[Dashcam mode](#dashcam)|
+|Tesla|Model 3 2019-24|Traffic Aware Cruise Control|[Upstream](#upstream)|
+|Tesla|Model Y 2020-24|Traffic Aware Cruise Control|[Upstream](#upstream)|
 |Toyota|Alphard 2019-20|All|[Upstream](#upstream)|
 |Toyota|Alphard Hybrid 2021|All|[Upstream](#upstream)|
 |Toyota|Avalon 2016|Toyota Safety Sense P|[Upstream](#upstream)|
