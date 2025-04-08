@@ -6,10 +6,27 @@ from opendbc.car.tesla.teslacan import TeslaCAN
 from opendbc.car.tesla.values import CarControllerParams
 
 
+def torque_blended_angle(apply_angle, torsion_bar_torque):
+  deadzone = CarControllerParams.TORQUE_TO_ANGLE_DEADZONE
+  if abs(torsion_bar_torque) < deadzone:
+    return apply_angle
+
+  limit = CarControllerParams.TORQUE_TO_ANGLE_CLIP
+  if apply_angle * torsion_bar_torque >= 0:
+    # Manually steering in the same direction as OP
+    strength = CarControllerParams.TORQUE_TO_ANGLE_MULTIPLIER_OUTER
+  else:
+    # User is opposing OP direction
+    strength = CarControllerParams.TORQUE_TO_ANGLE_MULTIPLIER_INNER
+
+  torque = torsion_bar_torque - deadzone if torsion_bar_torque > 0 else torsion_bar_torque + deadzone
+  return apply_angle + np.clip(torque, -limit, limit) * strength
+
 class CarController(CarControllerBase):
   def __init__(self, dbc_names, CP):
     super().__init__(dbc_names, CP)
     self.apply_angle_last = 0
+    self.last_hands_nanos = 0
     self.packer = CANPacker(dbc_names[Bus.party])
     self.tesla_can = TeslaCAN(self.packer)
 
@@ -19,14 +36,31 @@ class CarController(CarControllerBase):
 
     # Disengage and allow for user override on high torque inputs
     # TODO: move this to a generic disengageRequested carState field and set CC.cruiseControl.cancel based on it
-    hands_on_fault = CS.hands_on_level >= 3
+    hands_on_fault = (CS.hands_on_level >= 3
+        # user is applying lots of force or...
+        or (CS.steering_override and abs(CS.out.steeringAngleDeg - actuators.steeringAngleDeg) > CarControllerParams.CONTINUED_OVERRIDE_ANGLE) # already overriding and...
+      and not CS.out.standstill)  # continued angular disagreement while moving.
     cruise_cancel = CC.cruiseControl.cancel or hands_on_fault
     lat_active = CC.latActive and not hands_on_fault
 
     if self.frame % 2 == 0:
-      # Angular rate limit based on speed
-      self.apply_angle_last = apply_std_steer_angle_limits(actuators.steeringAngleDeg, self.apply_angle_last, CS.out.vEgo,
-                                                           CS.out.steeringAngleDeg, CC.latActive, CarControllerParams.ANGLE_LIMITS)
+      if CS.hands_on_level > 0:
+        self.last_hands_nanos = now_nanos
+      elif now_nanos - self.last_hands_nanos > 1e9:
+        CS.steering_override = False
+
+      # Reset override when disengaged to ensure a fresh activation always engages steering.
+      if not CC.latActive:
+        CS.steering_override = False
+
+      if lat_active:
+        torque_blended_angle_deg = torque_blended_angle(actuators.steeringAngleDeg, CS.out.steeringTorque)
+
+        # Angular rate limit based on speed
+        self.apply_angle_last = apply_std_steer_angle_limits(torque_blended_angle_deg, self.apply_angle_last, CS.out.vEgo,
+                                                             CS.out.steeringAngleDeg, CC.lat_active, CarControllerParams.ANGLE_LIMITS)
+      else:
+        self.apply_angle_last = CS.out.steeringAngleDeg
 
       can_sends.append(self.tesla_can.create_steering_control(self.apply_angle_last, lat_active, (self.frame // 2) % 16))
 
